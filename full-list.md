@@ -2,21 +2,25 @@
 
 - `TTV LOL` - [chrome](https://chrome.google.com/webstore/detail/ttv-lol/ofbbahodfeppoklmgjiokgfdgcndngjm) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/ttv-lol/) / [code](https://github.com/TTV-LOL/extensions)
   - Uses a proxy on the main m3u8 file to get a stream without ads.
-- `Purple AdBlock` - [chrome](https://chrome.google.com/webstore/detail/purple-adblock/lkgcfobnmghhbhgekffaadadhmeoindg) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/purpleadblock/) / [code](https://github.com/arthurbolsoni/Purple-adblock/)
-  - Uses a proxy on the main m3u8 file to get a stream without ads.
-- `Video Ad-Block, for Twitch` (fork) - [chrome](https://chrome.google.com/webstore/detail/twitch-adblock/ljhnljhabgjcihjoihakgdiicdjncpkd) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/twitch-adblock/) / [code](https://github.com/cleanlock/VideoAdBlockForTwitch)
-  - Replaces ad segments with ad-free segments (480p resolution). Afterwards it invokes a pause/play to resync the player which then continues normally (normal resolution).
+- `TTV LOL PRO` - [code](https://github.com/younesaassila/ttv-lol-pro)
+  - A fork of the `TTV LOL` extension with some UX improvements.
 - `Alternate Player for Twitch.tv` - [chrome](https://chrome.google.com/webstore/detail/alternate-player-for-twit/bhplkbgoehhhddaoolmakpocnenplmhf) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/twitch_5/)
   - Removes ad segments (no playback until ad-free stream).
+- `Video Ad-Block, for Twitch` (fork) - [chrome](https://chrome.google.com/webstore/detail/twitch-adblock/ljhnljhabgjcihjoihakgdiicdjncpkd) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/twitch-adblock/) / [code](https://github.com/cleanlock/VideoAdBlockForTwitch)
+  - Replaces ad segments with ad-free segments. Opt-in proxy fallback during ad segments when the ad-free stream fails locally. Adblocker warning when all methods fail.
+- `Purple AdBlock` - [chrome](https://chrome.google.com/webstore/detail/purple-adblock/lkgcfobnmghhbhgekffaadadhmeoindg) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/purpleadblock/) / [code](https://github.com/arthurbolsoni/Purple-adblock/)
+  - Replaces ad segments with ad-free segments. Proxy fallback which is currently broken. Loading wheel when all methods fail.
+- `ttv-ublock` - [chrome](https://chrome.google.com/webstore/detail/ttv-ad-block/kndhknfnihidhcfnaacnndbolonbimai) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/ttv-adblock/) / [code](https://github.com/odensc/ttv-ublock)
+  - Switches to the `embed` player at a network level. No ads but Twitch detects this and may display a purple screen every 10-15 mins asking the user to remove ad blockers (depends on time of day).
+- `AdGuard Extra (Beta)` - [chrome](https://chrome.google.com/webstore/detail/adguard-extra-beta/mglpocjcjbekdckiahfhagndealpkpbj) / [firefox](https://github.com/AdguardTeam/AdGuardExtra/#firefox)
+  - Uses segments from the `embed` player during ads. This can get a clean stream faster but suffers from audio sync / freezing issues.
 - `ttv_adEraser` - [chrome](https://chrome.google.com/webstore/detail/ttv-aderaser/pjnopimdnmhiaanhjfficogijajbhjnc) / [firefox (manual install)](https://github.com/LeonHeidelbach/ttv_adEraser#mozilla-firefox) / [code](https://github.com/LeonHeidelbach/ttv_adEraser)
   - Switches to the `embed` player when there's ads. May display purple screen if both ads and purple screen show at the same time?
 - `ttv-tools` - [firefox (manual install)](https://github.com/Nerixyz/ttv-tools/releases) / [code](https://github.com/Nerixyz/ttv-tools)
   - Removes ad segments (no playback until ad-free stream).
-- `ttv-ublock` - [chrome](https://chrome.google.com/webstore/detail/ttv-ad-block/kndhknfnihidhcfnaacnndbolonbimai) / [firefox](https://addons.mozilla.org/en-US/firefox/addon/ttv-adblock/) / [code](https://github.com/odensc/ttv-ublock)
-  - Switches to the `embed` player at a network level. No ads but Twitch detects this and may display a purple screen every 10-15 mins asking the user to remove ad blockers (depends on time of day).
 - `Twitch-HLS-AdBlock` - [chrome / firefox (manual install)](https://github.com/instance01/Twitch-HLS-AdBlock#installation) / [code](https://github.com/instance01/Twitch-HLS-AdBlock)
   - Removes ad segments (no playback until ad-free stream).
-
+  
 ---
 
 *Compile from source*
@@ -26,8 +30,6 @@
 
 ## Web browser scripts (uBlock Origin / userscript)
 
-- https://github.com/pixeltris/TwitchAdSolutions#Scripts
-  - A few scripts using different techniques.
 - https://github.com/Wilkolicious/twitchAdSkip
 - https://gist.github.com/simple-hacker/ddd81964b3e8bca47e0aead5ad19a707/
 - https://greasyfork.org/en/scripts/415412-twitch-refresh-on-advert/code
@@ -40,6 +42,7 @@
 ## Applications / third party websites
 - `streamlink` - [code](https://github.com/streamlink/streamlink) / [website](https://streamlink.github.io/streamlink-twitch-gui/)
   - Removes ad segments (no playback until ad-free stream).
+  - Use [this](https://github.com/2bc4/streamlink-ttvlol) modified file for uninterrupted playback.
 - `Xtra for Twitch` (fork) - [apks](https://github.com/crackededed/Xtra/releases) / [code](https://github.com/crackededed/Xtra)
   - Android app. I think this blocks ads, but I'm not 100% sure. If not maybe try [Twire](https://github.com/twireapp/Twire).
 - https://twitchls.com/

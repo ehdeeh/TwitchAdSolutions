@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         TwitchAdSolutions (notify-swap)
+// @name         TwitchAdSolutions (video-swap-new)
 // @namespace    https://github.com/pixeltris/TwitchAdSolutions
-// @version      1.13
-// @updateURL    https://github.com/pixeltris/TwitchAdSolutions/raw/master/notify-swap/notify-swap.user.js
-// @downloadURL  https://github.com/pixeltris/TwitchAdSolutions/raw/master/notify-swap/notify-swap.user.js
-// @description  Multiple solutions for blocking Twitch ads (notify-swap)
+// @version      1.16
+// @updateURL    https://github.com/pixeltris/TwitchAdSolutions/raw/master/video-swap-new/video-swap-new.user.js
+// @downloadURL  https://github.com/pixeltris/TwitchAdSolutions/raw/master/video-swap-new/video-swap-new.user.js
+// @description  Multiple solutions for blocking Twitch ads (video-swap-new)
 // @author       pixeltris
 // @match        *://*.twitch.tv/*
 // @run-at       document-start
@@ -18,9 +18,8 @@
         scope.OPT_MODE_STRIP_AD_SEGMENTS = true;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED = true;
         scope.OPT_MODE_NOTIFY_ADS_WATCHED_MIN_REQUESTS = false;
-        scope.OPT_BACKUP_PLAYER_TYPE = 'thunderdome';//'picture-by-picture';'thunderdome';
+        scope.OPT_BACKUP_PLAYER_TYPE = 'embed';
         scope.OPT_REGULAR_PLAYER_TYPE = 'site';
-        scope.OPT_INITIAL_M3U8_ATTEMPTS = 1;
         scope.OPT_ACCESS_TOKEN_PLAYER_TYPE = 'site';
         scope.AD_SIGNIFIER = 'stitched-ad';
         scope.LIVE_SIGNIFIER = ',live';
@@ -39,6 +38,7 @@
         for (var i = 0; i < bs.length; i++) {
             scope.gql_device_id_rolling += charTable[(bs.charCodeAt(i) ^ di) % charTable.length];
         }
+        scope.gql_device_id_rolling = '1';//temporary
     }
     declareOptions(window);
     var twitchMainWorker = null;
@@ -63,6 +63,7 @@
                 ${makeGraphQlPacket.toString()}
                 ${tryNotifyAdsWatchedM3U8.toString()}
                 ${parseAttributes.toString()}
+                ${onFoundAd.toString()}
                 declareOptions(self);
                 self.addEventListener('message', function(e) {
                     if (e.data.key == 'UboUpdateDeviceId') {
@@ -80,7 +81,7 @@
                     var adDiv = getAdDiv();
                     if (adDiv != null) {
                         adDiv.P.textContent = 'Blocking' + (e.data.isMidroll ? ' midroll' : '') + ' ads...';
-                        adDiv.style.display = 'block';
+                        //adDiv.style.display = 'block';
                     }
                 }
                 else if (e.data.key == 'UboHideAdBanner') {
@@ -126,6 +127,15 @@
         req.send();
         return req.responseText.split("'")[1];
     }
+    function onFoundAd(streamInfo, textStr, reloadPlayer) {
+        console.log('Found ads, switch to backup');
+        streamInfo.UseBackupStream = true;
+        streamInfo.IsMidroll = textStr.includes('"MIDROLL"') || textStr.includes('"midroll"');
+        if (reloadPlayer) {
+            postMessage({key:'UboReloadPlayer'});
+        }
+        postMessage({key:'UboShowAdBanner',isMidroll:streamInfo.IsMidroll});
+    }
     async function processM3U8(url, textStr, realFetch) {
         var streamInfo = StreamInfosByUrl[url];
         if (streamInfo == null) {
@@ -137,96 +147,30 @@
             return textStr;
         }
         var haveAdTags = textStr.includes(AD_SIGNIFIER);
-        if (streamInfo.IsLowResNoAds) {
-            var wasBackupNull = streamInfo.BackupUrl == null;
-            for (var i = 0; i < 2; i++) {
-                try {
-                    if (i != 0 && streamInfo.IsMidroll) {
-                        // Doesn't work well with midrolls (often wont see the ad until a few requests in, which creates a reload loop)
-                        continue;
-                    }
-                    let index = i;
-                    var targetUrl = index == 0 ? streamInfo.BackupUrl : null;
-                    if (index != 0 || (streamInfo.BackupUrl == null && !streamInfo.IsRequestingBackup)) {
-                        // NOTE: We currently don't fetch the oauth_token. You wont be able to access private streams like this.
-                        if (index == 0) {
-                            streamInfo.IsRequestingBackup = true;
-                        }
-                        var accessTokenResponse = await getAccessToken(streamInfo.ChannelName, OPT_REGULAR_PLAYER_TYPE);
-                        if (accessTokenResponse.status === 200) {
-                            var accessToken = await accessTokenResponse.json();
-                            var urlInfo = new URL('https://usher.ttvnw.net/api/channel/hls/' + streamInfo.ChannelName + '.m3u8' + streamInfo.RootM3U8Params);
-                            urlInfo.searchParams.set('sig', accessToken.data.streamPlaybackAccessToken.signature);
-                            urlInfo.searchParams.set('token', accessToken.data.streamPlaybackAccessToken.value);
-                            var encodingsM3u8Response = await realFetch(urlInfo.href);
-                            if (encodingsM3u8Response.status === 200) {
-                                // TODO: Maybe look for the most optimal m3u8
-                                var encodingsM3u8 = await encodingsM3u8Response.text();
-                                var streamM3u8Url = encodingsM3u8.match(/^https:.*\.m3u8$/m)[0];
-                                // Maybe this request is a bit unnecessary
-                                var streamM3u8Response = await realFetch(streamM3u8Url);
-                                if (streamM3u8Response.status == 200) {
-                                    targetUrl = streamM3u8Url;
-                                    streamInfo.BackupEncodings[index] = encodingsM3u8;
-                                    if (index == 0) {
-                                        streamInfo.BackupUrl = streamM3u8Url;
-                                        streamInfo.IsRequestingBackup = false;
-                                        console.log('Fetched backup url: ' + streamInfo.BackupUrl);
-                                    }
-                                } else {
-                                    console.log('Backup url request (streamM3u8) failed with ' + streamM3u8Response.status);
-                                }
-                            } else {
-                                console.log('Backup url request (encodingsM3u8) failed with ' + encodingsM3u8Response.status);
-                            }
-                        } else {
-                            console.log('Backup url request (accessToken) failed with ' + accessTokenResponse.status);
-                        }
-                    }
-                    if (targetUrl != null) {
-                        var backupM3u8 = null;
-                        var backupM3u8Response = await realFetch(targetUrl);
-                        if (backupM3u8Response.status == 200) {
-                            backupM3u8 = await backupM3u8Response.text();
-                        }
-                        if (backupM3u8 != null && !backupM3u8.includes(AD_SIGNIFIER)) {
-                            if (streamInfo.LastBackupRequestWithoutAds[index] < Date.now() - 1333) {
-                                streamInfo.LastBackupRequestWithoutAds[index] = Date.now();
-                                streamInfo.NumBackupRequestWithoutAds[index]++;
-                            }
-                        } else {
-                            // TODO: Throttle this. Currently this sends way too many requests.
-                            if (index == 0 && !streamInfo.IsMidroll) {
-                                /*await */tryNotifyAdsWatchedM3U8(backupM3u8);
-                            }
-                            streamInfo.NumBackupRequestWithoutAds[index] = 0;
-                        }
-                    }
-                } catch (err) {
-                    console.log('Fetching backup m3u8 failed');
-                    console.log(err);
-                }
-                if (wasBackupNull) {
-                    continue;
-                }
-            }
-            if (streamInfo.NumBackupRequestWithoutAds[0] >= 3 || streamInfo.NumBackupRequestWithoutAds[1] >= 4) {
-                console.log('No more ads ' + streamInfo.NumBackupRequestWithoutAds[0] + ' ' + streamInfo.NumBackupRequestWithoutAds[1]);
-                postMessage({key:'UboHideAdBanner'});
-                streamInfo.SwappedEncodings = streamInfo.BackupEncodings[streamInfo.NumBackupRequestWithoutAds[0] >= 3 ? 0 : 1];
-                streamInfo.SwappedEncodingsTime = Date.now();
-                streamInfo.IsLowResNoAds = false;
+        if (streamInfo.UseBackupStream) {
+            if (streamInfo.Encodings == null) {
+                console.log('Found backup stream but not main stream?');
+                streamInfo.UseBackupStream = false;
                 postMessage({key:'UboReloadPlayer'});
+                return '';
+            } else {
+                var streamM3u8Url = streamInfo.Encodings.match(/^https:.*\.m3u8$/m)[0];
+                var streamM3u8Response = await realFetch(streamM3u8Url);
+                if (streamM3u8Response.status == 200) {
+                    var streamM3u8 = await streamM3u8Response.text();
+                    if (streamM3u8 != null && !streamM3u8.includes(AD_SIGNIFIER)) {
+                        console.log('No more ads on main stream. Triggering player reload to go back to main stream...');
+                        streamInfo.UseBackupStream = false;
+                        postMessage({key:'UboHideAdBanner'});
+                        postMessage({key:'UboReloadPlayer'});
+                    }
+                }
             }
-            if (haveAdTags) {
-                console.log('Double dipping ads?');
+            if (streamInfo.BackupEncodings == null) {
                 return '';
             }
         } else if (haveAdTags) {
-            console.log('Found ads, switch to low res');
-            streamInfo.IsLowResNoAds = true;
-            streamInfo.IsMidroll = textStr.includes('"MIDROLL"') || textStr.includes('"midroll"');
-            postMessage({key:'UboReloadPlayer'});
+            onFoundAd(streamInfo, textStr, true);
             return '';
         } else {
             postMessage({key:'UboHideAdBanner'});
@@ -269,100 +213,66 @@
                         return new Promise(async function(resolve, reject) {
                             // - First m3u8 request is the m3u8 with the video encodings (360p,480p,720p,etc).
                             // - Second m3u8 request is the m3u8 for the given encoding obtained in the first request. At this point we will know if there's ads.
-                            var maxAttempts = OPT_INITIAL_M3U8_ATTEMPTS <= 0 ? 1 : OPT_INITIAL_M3U8_ATTEMPTS;
-                            var attempts = 0;
-                            while(true) {
-                                var encodingsM3u8Response = await realFetch(url, options);
-                                if (encodingsM3u8Response != null && encodingsM3u8Response.status === 200) {
-                                    var encodingsM3u8 = await encodingsM3u8Response.text();
-                                    var streamM3u8Url = encodingsM3u8.match(/^https:.*\.m3u8$/m)[0];
-                                    var streamM3u8Response = await realFetch(streamM3u8Url);
-                                    var streamM3u8 = await streamM3u8Response.text();
-                                    if (!streamM3u8.includes(AD_SIGNIFIER) || ++attempts >= maxAttempts) {
-                                        if (maxAttempts > 1 && attempts >= maxAttempts) {
-                                            console.log('max skip ad attempts reached (attempt #' + attempts + ')');
+                            var streamInfo = StreamInfos[channelName];
+                            var useBackupStream = false;
+                            if (streamInfo == null || streamInfo.Encodings == null || streamInfo.BackupEncodings == null) {
+                                StreamInfos[channelName] = streamInfo = {
+                                    Encodings: null,
+                                    BackupEncodings: null,
+                                    IsMidroll: false,
+                                    UseBackupStream: false,
+                                    ChannelName: channelName
+                                };
+                                for (var i = 0; i < 2; i++) {
+                                    var encodingsUrl = url;
+                                    if (i == 1) {
+                                        var accessTokenResponse = await getAccessToken(channelName, OPT_BACKUP_PLAYER_TYPE);
+                                        if (accessTokenResponse != null && accessTokenResponse.status === 200) {
+                                            var accessToken = await accessTokenResponse.json();
+                                            var urlInfo = new URL('https://usher.ttvnw.net/api/channel/hls/' + channelName + '.m3u8' + (new URL(url)).search);
+                                            urlInfo.searchParams.set('sig', accessToken.data.streamPlaybackAccessToken.signature);
+                                            urlInfo.searchParams.set('token', accessToken.data.streamPlaybackAccessToken.value);
+                                            encodingsUrl = urlInfo.href;
+                                        } else {
+                                            resolve(accessTokenResponse);
+                                            return;
                                         }
-                                        var hasSwappedEncodings = false;
-                                        var streamInfo = StreamInfos[channelName];
-                                        if (streamInfo == null) {
-                                            StreamInfos[channelName] = streamInfo = {};
-                                        } else if (streamInfo.SwappedEncodings != null && streamInfo.SwappedEncodingsTime >= Date.now() - 10000) {
-                                            encodingsM3u8 = streamInfo.SwappedEncodings;
-                                            hasSwappedEncodings = true;
-                                        }
-                                        var forcedLowRes = false;
-                                        var existingStreamInfo = StreamInfos[channelName];
-                                        if (existingStreamInfo.IsLowResNoAds || (!hasSwappedEncodings && streamM3u8.includes(AD_SIGNIFIER))) {
-                                            var accessTokenResponse = await getAccessToken(channelName, OPT_BACKUP_PLAYER_TYPE);
-                                            if (accessTokenResponse.status === 200) {
-                                                var accessToken = await accessTokenResponse.json();
-                                                var urlInfo = new URL('https://usher.ttvnw.net/api/channel/hls/' + channelName + '.m3u8' + (new URL(url)).search);
-                                                urlInfo.searchParams.set('sig', accessToken.data.streamPlaybackAccessToken.signature);
-                                                urlInfo.searchParams.set('token', accessToken.data.streamPlaybackAccessToken.value);
-                                                var lowResEncodingsM3u8Response = await realFetch(urlInfo.href);
-                                                if (lowResEncodingsM3u8Response != null && lowResEncodingsM3u8Response.status === 200) {
-                                                    var lowResEncodingsM3u8 = await lowResEncodingsM3u8Response.text();
-                                                    var lowResLines = lowResEncodingsM3u8.replace('\r', '').split('\n');
-                                                    var lowResBestUrl = null;
-                                                    for (var i = 0; i < lowResLines.length; i++) {
-                                                        if (lowResLines[i].startsWith('#EXT-X-STREAM-INF')) {
-                                                            var res = parseAttributes(lowResLines[i])['RESOLUTION'];
-                                                            if (res && lowResLines[i + 1].endsWith('.m3u8')) {
-                                                                // Assumes resolutions are correctly ordered
-                                                                lowResBestUrl = lowResLines[i + 1];
-                                                                break;
-                                                            }
-                                                        }
-                                                    }
-                                                    if (lowResBestUrl != null) {
-                                                        var normalEncodingsM3u8 = encodingsM3u8;
-                                                        var normalLines = normalEncodingsM3u8.replace('\r', '').split('\n');
-                                                        for (var i = 0; i < normalLines.length - 1; i++) {
-                                                            if (normalLines[i].startsWith('#EXT-X-STREAM-INF')) {
-                                                                var res = parseAttributes(normalLines[i])['RESOLUTION'];
-                                                                if (res) {
-                                                                    lowResBestUrl += ' ';// The stream doesn't load unless each url line is unique
-                                                                    normalLines[i + 1] = lowResBestUrl;
-                                                                }
-                                                            }
-                                                        }
-                                                        encodingsM3u8 = normalLines.join('\r\n');
-                                                    } else {
-                                                        encodingsM3u8 = lowResEncodingsM3u8;
-                                                    }
-                                                    forcedLowRes = true;
-                                                    postMessage({key:'UboShowAdBanner',isMidroll:streamInfo.IsMidroll});
-                                                }
-                                            }
-                                        }
-                                        // This might potentially backfire... maybe just add the new urls
-                                        streamInfo.ChannelName = channelName;
-                                        streamInfo.RootM3U8Url = url;
-                                        streamInfo.RootM3U8Params = (new URL(url)).search;
-                                        streamInfo.BackupUrl = null;
-                                        streamInfo.BackupEncodings = [null,null];
-                                        streamInfo.IsRequestingBackup = false;
-                                        streamInfo.NumBackupRequestWithoutAds = [0,0];
-                                        streamInfo.LastBackupRequestWithoutAds = [0,0];
-                                        streamInfo.SwappedEncodings = null;
-                                        streamInfo.SwappedEncodingsTime = 0;
-                                        streamInfo.IsMidroll = !!streamInfo.IsMidroll;
-                                        streamInfo.IsLowResNoAds = forcedLowRes;
-                                        var lines = encodingsM3u8.replace('\r', '').split('\n');
-                                        for (var i = 0; i < lines.length; i++) {
-                                            if (!lines[i].startsWith('#') && lines[i].includes('.m3u8')) {
-                                                StreamInfosByUrl[lines[i].trimEnd()] = streamInfo;
-                                            }
-                                        }
-                                        resolve(new Response(encodingsM3u8));
-                                        break;
                                     }
-                                    console.log('attempt to skip ad (attempt #' + attempts + ')');
-                                } else {
-                                    // Stream is offline?
-                                    resolve(encodingsM3u8Response);
-                                    break;
+                                    var encodingsM3u8Response = await realFetch(encodingsUrl, options);
+                                    if (encodingsM3u8Response != null && encodingsM3u8Response.status === 200) {
+                                        var encodingsM3u8 = await encodingsM3u8Response.text();
+                                        if (i == 0) {
+                                            streamInfo.Encodings = encodingsM3u8;
+                                            var streamM3u8Url = encodingsM3u8.match(/^https:.*\.m3u8$/m)[0];
+                                            var streamM3u8Response = await realFetch(streamM3u8Url);
+                                            if (streamM3u8Response.status == 200) {
+                                                var streamM3u8 = await streamM3u8Response.text();
+                                                if (streamM3u8.includes(AD_SIGNIFIER)) {
+                                                    onFoundAd(streamInfo, streamM3u8, false);
+                                                }
+                                            } else {
+                                                resolve(streamM3u8Response);
+                                                return;
+                                            }
+                                        } else {
+                                            streamInfo.BackupEncodings = encodingsM3u8;
+                                        }
+                                        var lines = encodingsM3u8.replace('\r', '').split('\n');
+                                        for (var j = 0; j < lines.length; j++) {
+                                            if (!lines[j].startsWith('#') && lines[j].includes('.m3u8')) {
+                                                StreamInfosByUrl[lines[j].trimEnd()] = streamInfo;
+                                            }
+                                        }
+                                    } else {
+                                        resolve(encodingsM3u8Response);
+                                        return;
+                                    }
                                 }
+                            }
+                            if (streamInfo.UseBackupStream) {
+                                resolve(new Response(streamInfo.BackupEncodings));
+                            } else {
+                                resolve(new Response(streamInfo.Encodings));
                             }
                         });
                     }
